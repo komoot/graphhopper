@@ -496,4 +496,22 @@ public class Helper
     {
         return Math.round(value * 100) / 100d;
     }
+
+
+    /**
+     * This method handles the specified (potentially negative) int as unsigned bit representation
+     * and returns the positive converted long.
+     */
+    public static final long toUnsignedLong( int x )
+    {
+        return ((long) x) & 0xFFFFffffL;
+    }
+
+    /**
+     * Converts the specified long back into a signed int (reverse method for toUnsignedLong)
+     */
+    public static final int toSignedInt( long x )
+    {
+        return (int) x;
+    }
 }
