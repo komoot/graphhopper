@@ -13,9 +13,12 @@
  * drnextgis, ru translation and JS fixes
  * duongnt, fixes in storage
  * lmar, improved instructions information
+ * fbonzon, UI improvements like #615
  * florent-morel, improvements regarding fords, #320
  * fredao, translations 
  * henningvs, doc improvements
+ * highsource, more efficient geometry update, ui fixes
+ * IsNull, improvements like #708
  * jansoe, many improvements regarding A* algorithm, forcing direction, roundabouts etc
  * jansonhanson, general host config
  * JohannesPelzer, improved GPX information and various other things

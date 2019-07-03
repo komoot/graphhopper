@@ -130,6 +130,22 @@ public class Helper
         }
     }
 
+    /**
+     * This method handles the specified (potentially negative) int as unsigned bit representation
+     * and returns the positive converted long. Copied from 0.13 version of Graphhopper
+     */
+    public static final long toUnsignedLong(int x) {
+        return ((long) x) & 0xFFFFffffL;
+    }
+
+    /**
+     * Converts the specified long back into a signed int (reverse method for toUnsignedLong)
+     * Copied from 0.13 version of Graphhopper
+     */
+    public static final int toSignedInt(long x) {
+        return (int) x;
+    }
+
     public static void saveProperties( Map<String, String> map, Writer tmpWriter ) throws IOException
     {
         BufferedWriter writer = new BufferedWriter(tmpWriter);
