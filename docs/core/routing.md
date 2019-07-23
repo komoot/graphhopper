@@ -1,9 +1,14 @@
+# Routing via Java API
+
+To use the following examples you need to specify the dependency in
+your [Maven config](/README.md#maven) correctly.
+
 To do routing in your Java code you'll need just a few lines of code:
 
 ```java
-// create singleton
-GraphHopper hopper = new GraphHopper().forServer();
-hopper.setOSMFile(osmFile);
+// create one GraphHopper instance
+GraphHopper hopper = new GraphHopperOSM().forServer();
+hopper.setDataReaderFile(osmFile);
 // where to store graphhopper files?
 hopper.setGraphHopperLocation(graphFolder);
 hopper.setEncodingManager(new EncodingManager("car"));
@@ -26,12 +31,15 @@ if(rsp.hasErrors()) {
    return;
 }
 
-// points, distance in meters and time in millis of the full path
-PointList pointList = rsp.getPoints();
-double distance = rsp.getDistance();
-long timeInMs = rsp.getTime();
+// use the best path, see the GHResponse class for more possibilities.
+PathWrapper path = rsp.getBest();
 
-InstructionList il = rsp.getInstructions();
+// points, distance in meters and time in millis of the full path
+PointList pointList = path.getPoints();
+double distance = path.getDistance();
+long timeInMs = path.getTime();
+
+InstructionList il = path.getInstructions();
 // iterate over every turn instruction
 for(Instruction instruction : il) {
    instruction.getDistance();
@@ -45,16 +53,20 @@ List<Map<String, Object>> iList = il.createJson();
 List<GPXEntry> list = il.createGPXList();
 ```
 
-The default is to use the speed-up mode for one profile. If you need multiple profiles you 
-specify a list of profiles (e.g. car,bike) and the speed-up mode is applied to the first profile only (e.g. car).
-The other vehicles then use a more flexible routing.
+## Speed mode vs. Hybrid mode vs. Flexibile mode
 
-You can also completely disable the speed-up mode to make all vehicles using the flexibility mode.
-Then pick one vehicle and optionally the algorithm like 'bidirectional astar' as algorithm:
+The default option of GraphHopper is the speed mode. If you don't want to use the speed-up mode you can disable it before the import (see
+config.yml `prepare.ch.weightings=no`) or on a per request base by adding `ch.disable=true` to the request. If you want to use the hybrid mode you have to enable it before the import 
+(see config.yml `prepare.lm.weightings=fastest`).
+
+If you need multiple vehicle profiles you can specify a list of vehicle profiles (see
+config.yml e.g. `graph.flag_encoders=car,bike` or use `new EncodingManager("car,bike")`). 
+
+To calculate a route you have to pick one vehicle and optionally an algorithm like `bidirectional_astar`:
 
 ```java
-GraphHopper hopper = new GraphHopper().forServer();
-hopper.setCHEnable(false);
+GraphHopper hopper = new GraphHopperOSM().forServer();
+hopper.setCHEnabled(false);
 hopper.setOSMFile(osmFile);
 hopper.setGraphHopperLocation(graphFolder);
 hopper.setEncodingManager(new EncodingManager("car,bike"));
@@ -62,26 +74,45 @@ hopper.setEncodingManager(new EncodingManager("car,bike"));
 hopper.importOrLoad();
 
 GHRequest req = new GHRequest(latFrom, lonFrom, latTo, lonTo).
-    setVehicle("bike").setAlgorithm(AlgorithmOptions.ASTAR_BI);
+    setVehicle("bike").setAlgorithm(Parameters.Algorithms.ASTAR_BI);
 GHResponse res = hopper.route(req);
 ```
 
-In the flexibility mode it is also possible to add a desired heading (north based azimuth between 0 and 360 degree)
-to any point:
+## Heading
+
+The flexibile and hybrid mode allows to add a desired heading (north based azimuth between 0 and 360 degree)
+to any point. Adding a heading makes it more likely that a route starts towards the provided direction:
 ```java
 GHRequest req = new GHRequest().addPoint(new GHPoint (latFrom, lonFrom), favoredHeading).addPoint(new GHPoint (latTo, lonTo));
 ```
 or to avoid u-turns at via points
 ```java
-req.getHints().put("pass_through", true);
+req.getHints().put(Parameters.Routing.PASS_THROUGH, true);
 ```
 
 A heading with the value 'NaN' won't be enforced and a heading not within [0, 360] will trigger an IllegalStateException.
 It is important to note that if you force the heading at via or end points the outgoing heading needs to be specified.
 I.e. if you want to force "coming from south" to a destination you need to specify the resulting "heading towards north" instead, which is 0.
+
+## Alternative Routes
+
+The flexibile and hybrid mode allows you to calculate alternative routes via:
+```java
+req.setAlgorithm(Parameters.Algorithms.ALT_ROUTE)
+```
+
+Note that this setting can affect speed of your routing requests. 
+
+You can tune the maximum numbers via:
+```java
+req.getHints().put(Parameters.AltRoute.MAX_PATHS, "3");
+```
+
+See the Parameters class for further hints.
+
+## Java client (client-hc)
  
-In case you need a web access in a Java or an Android application the GraphHopperWeb class comes handy,
- see the 'web' sub module or [the Java client for the GraphHopper Directions API](https://github.com/graphhopper/directions-api-java-client).
+If you want to calculate routes using the [GraphHopper Directions API](https://www.graphhopper.com/products/) or a self hosted instance of GraphHopper, you can use the [Java and Android client-hc](https://github.com/graphhopper/graphhopper/tree/master/client-hc) (there are also clients for [Java Script](https://github.com/graphhopper/directions-api-js-client) and [many other languages](https://github.com/graphhopper/directions-api-clients)). 
 
 ```java
 GraphHopperAPI gh = new GraphHopperWeb();

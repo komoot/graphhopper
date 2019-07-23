@@ -1,10 +1,10 @@
 /*
- *  Licensed to GraphHopper and Peter Karich under one or more contributor
- *  license agreements. See the NOTICE file distributed with this work for 
+ *  Licensed to GraphHopper GmbH under one or more contributor
+ *  license agreements. See the NOTICE file distributed with this work for
  *  additional information regarding copyright ownership.
  *
- *  GraphHopper licenses this file to you under the Apache License, 
- *  Version 2.0 (the "License"); you may not use this file except in 
+ *  GraphHopper GmbH licenses this file to you under the Apache License,
+ *  Version 2.0 (the "License"); you may not use this file except in
  *  compliance with the License. You may obtain a copy of the License at
  *
  *       http://www.apache.org/licenses/LICENSE-2.0
@@ -17,41 +17,66 @@
  */
 package com.graphhopper.routing.util;
 
+import com.graphhopper.routing.profiles.BooleanEncodedValue;
 import com.graphhopper.util.EdgeIteratorState;
 
 /**
  * @author Peter Karich
  */
-public class DefaultEdgeFilter implements EdgeFilter
-{
-    private final boolean in;
-    private final boolean out;
-    private FlagEncoder encoder;
+public class DefaultEdgeFilter implements EdgeFilter {
+    private final boolean bwd;
+    private final boolean fwd;
+    protected final BooleanEncodedValue accessEnc;
+
+    protected DefaultEdgeFilter(BooleanEncodedValue accessEnc, boolean fwd, boolean bwd) {
+        this.accessEnc = accessEnc;
+        this.fwd = fwd;
+        this.bwd = bwd;
+    }
+
+    public static DefaultEdgeFilter outEdges(BooleanEncodedValue accessEnc) {
+        return new DefaultEdgeFilter(accessEnc, true, false);
+    }
+
+    public static DefaultEdgeFilter outEdges(FlagEncoder flagEncoder) {
+        return new DefaultEdgeFilter(flagEncoder.getAccessEnc(), true, false);
+    }
+
+    public static DefaultEdgeFilter inEdges(FlagEncoder flagEncoder) {
+        return new DefaultEdgeFilter(flagEncoder.getAccessEnc(), false, true);
+    }
 
     /**
-     * Creates an edges filter which accepts both direction of the specified vehicle.
+     * Accepts all edges that are either forward or backward for the given flag encoder.
+     * Edges where neither one of the flags is enabled will still not be accepted. If you need to retrieve all edges
+     * regardless of their encoding use {@link EdgeFilter#ALL_EDGES} instead.
      */
-    public DefaultEdgeFilter( FlagEncoder encoder )
-    {
-        this(encoder, true, true);
-    }
-
-    public DefaultEdgeFilter( FlagEncoder encoder, boolean in, boolean out )
-    {
-        this.encoder = encoder;
-        this.in = in;
-        this.out = out;
+    public static DefaultEdgeFilter allEdges(FlagEncoder flagEncoder) {
+        return new DefaultEdgeFilter(flagEncoder.getAccessEnc(), true, true);
     }
 
     @Override
-    public final boolean accept( EdgeIteratorState iter )
-    {
-        return out && iter.isForward(encoder) || in && iter.isBackward(encoder);
+    public final boolean accept(EdgeIteratorState iter) {
+        if (iter.getBaseNode() == iter.getAdjNode()) {
+            // this is needed for edge-based CH, see #1525
+            // background: we need to explicitly accept shortcut edges that are loops, because if we insert a loop
+            // shortcut with the fwd flag a DefaultEdgeFilter with bwd=true and fwd=false does not find it, although
+            // it is also an 'incoming' edge.
+            return iter.get(accessEnc) || iter.getReverse(accessEnc);
+        }
+        return fwd && iter.get(accessEnc) || bwd && iter.getReverse(accessEnc);
+    }
+
+    public boolean acceptsBackward() {
+        return bwd;
+    }
+
+    public boolean acceptsForward() {
+        return fwd;
     }
 
     @Override
-    public String toString()
-    {
-        return encoder.toString() + ", in:" + in + ", out:" + out;
+    public String toString() {
+        return accessEnc.toString() + ", bwd:" + bwd + ", fwd:" + fwd;
     }
 }

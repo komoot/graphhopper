@@ -1,13 +1,15 @@
 # Translation
 
-You can help improve GraphHopper by adding your language!
+You can help improve GraphHopper by adding your language! We have a dedicated [forum for translations](https://discuss.graphhopper.com/c/developers/translations) in case you are unsure or want to discuss before changing things.
 
 See [this spreadsheet](https://docs.google.com/spreadsheets/d/10HKSFmxGVEIO92loVQetVmjXT0qpf3EA2jxuQSSYTdU/edit?pli=1#gid=0)
-and add a column for your language. Revisit it regularly to update or add new items. And see your language live at GraphHopper Maps e.g. explicitely specify the locale via:
+and add a column for your language. Revisit it regularly to update or add new items. And see your language live at GraphHopper Maps e.g. explicitly specify the locale via:
 
-[https://graphhopper.com/maps/?point=40.979898%2C-3.164062&point=39.909736%2C-2.8125&locale=de](https://graphhopper.com/maps/?point=40.979898%2C-3.164062&point=39.909736%2C-2.8125&locale=de) 
+[https://graphhopper.com/maps/?point=40.979898%2C-3.164062&point=39.909736%2C-2.8125**&locale=de**](https://graphhopper.com/maps/?point=40.979898%2C-3.164062&point=39.909736%2C-2.8125&locale=de) 
 
-de -> German, en -> Englisch, zh -> Simplified Chinese, ...
+de → German, en → English, zh → Simplified Chinese, …
+
+There are already many existing :jp: :cn: :us: :fr: :es: :it: :ru: :de:
 
 ## Questions
 
@@ -31,10 +33,10 @@ want to try your changes or want to speed up the integration you can do the foll
  * Do `cd graphhopper/core; curl 'https://docs.google.com/spreadsheets/d/10HKSFmxGVEIO92loVQetVmjXT0qpf3EA2jxuQSSYTdU/export?format=tsv&id=10HKSFmxGVEIO92loVQetVmjXT0qpf3EA2jxuQSSYTdU&gid=0' > tmp.tsv`
  * Then `./files/update-translations.sh tmp.tsv && rm tmp.tsv`
  * Now you can see your changes via `git diff`. Make sure that is the only one with `git status`
- * Now execute `mvn clean test` to see if you did not miss arguments in your translation (see point 2 in the questions above)
- * You can start a simple GraphHopper instance via './graphhopper.sh web europe_germany_berlin.pbf' and go to localhost:8989 append e.g. &locale=de if your translation does not show up automatically
+ * Now execute `mvn clean test` to see if you did not miss arguments in your translation (see point 2 in the questions above) and start
+ the [GraphHopper service](./quickstart-from-source.md) and go to localhost:8989 append e.g. &locale=de if your translation does not show up automatically
  * Read the [contributing guide](https://github.com/graphhopper/graphhopper/blob/master/CONTRIBUTING.md) to submit your changes
 
 ## License Agreement
 
-Please sign the <a href="http://www.clahub.com/agreements/graphhopper/graphhopper">GraphHopper License Agreement</a>.
+Please sign the <a href="https://github.com/graphhopper/graphhopper/blob/master/.github/CONTRIBUTING.md">GraphHopper License Agreement</a>.
