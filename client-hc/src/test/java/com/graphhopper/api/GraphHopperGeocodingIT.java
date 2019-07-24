@@ -6,6 +6,7 @@ import com.graphhopper.api.model.GHGeocodingResponse;
 import com.graphhopper.util.shapes.BBox;
 import com.graphhopper.util.shapes.GHPoint;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.net.SocketTimeoutException;
@@ -34,6 +35,7 @@ public class GraphHopperGeocodingIT {
     }
 
     @Test
+    @Ignore
     public void testExtent() {
         GHGeocodingResponse response = geocoding.geocode(new GHGeocodingRequest("new york", "en", 7));
         BBox extent = response.getHits().get(0).getExtendBBox();
