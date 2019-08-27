@@ -91,11 +91,11 @@ public class SimpleIntEncodedValue implements IntEncodedValue {
         return storeBothDirections ? 2 * bits : bits;
     }
 
-    private boolean isInitialized() {
+    protected boolean isInitialized() {
         return fwdMask != 0;
     }
 
-    private void checkValue(int value) {
+    protected void checkValue(int value) {
         if (!isInitialized())
             throw new IllegalStateException("EncodedValue " + getName() + " not initialized");
         if (value > maxValue)
@@ -174,5 +174,9 @@ public class SimpleIntEncodedValue implements IntEncodedValue {
         result = 31 * result + bwdShift;
         result = 31 * result + (storeBothDirections ? 1 : 0);
         return result;
+    }
+
+    protected long getMaxValue() {
+        return maxValue;
     }
 }
