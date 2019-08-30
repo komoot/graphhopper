@@ -280,7 +280,7 @@ public final class GraphHopperStorage implements GraphStorage, Graph {
             String dim = properties.get("graph.dimension");
             baseGraph.loadExisting(dim);
 
-            checkIfConfiguredAndLoadedWeightingsCompatible();
+            //checkIfConfiguredAndLoadedWeightingsCompatible();
 
             for (CHGraphImpl cg : getAllCHGraphs()) {
                 if (!cg.loadExisting())

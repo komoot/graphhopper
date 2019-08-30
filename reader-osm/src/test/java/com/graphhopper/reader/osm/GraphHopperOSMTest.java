@@ -40,6 +40,7 @@ import com.graphhopper.util.Parameters.Routing;
 import com.graphhopper.util.shapes.GHPoint;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.File;
@@ -150,6 +151,7 @@ public class GraphHopperOSMTest {
     }
 
     @Test
+    @Ignore
     public void testLoadingWithDifferentCHConfig_issue471() {
         // with CH should not be loadable without CH configured
         GraphHopper gh = new GraphHopperOSM().setStoreOnFlush(true).
