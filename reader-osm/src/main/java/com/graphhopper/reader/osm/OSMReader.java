@@ -81,7 +81,9 @@ public class OSMReader implements DataReader {
     private final DistanceCalc3D distCalc3D = Helper.DIST_3D;
     private final DouglasPeucker simplifyAlgo = new DouglasPeucker();
     private boolean smoothElevation = false;
-    private final boolean exitOnlyPillarNodeException = true;
+    //This is true by default but it seems we have issues in OSM data and if pillar or tower nodes in loops are missing
+    //Whole import fails if this is true
+    private final boolean exitOnlyPillarNodeException = false;
     private final Map<FlagEncoder, EdgeExplorer> outExplorerMap = new HashMap<>();
     private final Map<FlagEncoder, EdgeExplorer> inExplorerMap = new HashMap<>();
     protected long zeroCounter = 0;
