@@ -1,10 +1,10 @@
 /*
- *  Licensed to GraphHopper and Peter Karich under one or more contributor
- *  license agreements. See the NOTICE file distributed with this work for 
+ *  Licensed to GraphHopper GmbH under one or more contributor
+ *  license agreements. See the NOTICE file distributed with this work for
  *  additional information regarding copyright ownership.
  *
- *  GraphHopper licenses this file to you under the Apache License, 
- *  Version 2.0 (the "License"); you may not use this file except in 
+ *  GraphHopper GmbH licenses this file to you under the Apache License,
+ *  Version 2.0 (the "License"); you may not use this file except in
  *  compliance with the License. You may obtain a copy of the License at
  *
  *       http://www.apache.org/licenses/LICENSE-2.0
@@ -17,91 +17,89 @@
  */
 package com.graphhopper.routing.util;
 
+import com.graphhopper.reader.ConditionalTagInspector;
+import com.graphhopper.reader.ReaderNode;
+import com.graphhopper.reader.ReaderRelation;
+import com.graphhopper.reader.ReaderWay;
+import com.graphhopper.reader.osm.conditional.ConditionalOSMTagInspector;
+import com.graphhopper.reader.osm.conditional.DateRangeParser;
+import com.graphhopper.routing.profiles.*;
+import com.graphhopper.routing.weighting.TurnWeighting;
+import com.graphhopper.storage.IntsRef;
+import com.graphhopper.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.graphhopper.reader.OSMNode;
-import com.graphhopper.reader.OSMWay;
-import com.graphhopper.reader.OSMRelation;
-import com.graphhopper.util.*;
-
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Abstract class which handles flag decoding and encoding. Every encoder should be registered to a
  * EncodingManager to be usable. If you want the full long to be stored you need to enable this in
  * the GraphHopperStorage.
- * <p>
+ *
  * @author Peter Karich
  * @author Nop
  * @see EncodingManager
  */
-public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncoder
-{
+public abstract class AbstractFlagEncoder implements FlagEncoder {
     private final static Logger logger = LoggerFactory.getLogger(AbstractFlagEncoder.class);
-    protected final static int K_FORWARD = 0, K_BACKWARD = 1;
-    /* Edge Flag Encoder fields */
-    private long nodeBitMask;
-    private long wayBitMask;
-    private long relBitMask;
-    protected long forwardBit;
-    protected long backwardBit;
-    protected long directionBitMask;
-    protected long roundaboutBit;
-    protected EncodedDoubleValue speedEncoder;
-    // bit to signal that way is accepted
-    protected long acceptBit;
-    protected long ferryBit;
-
+    /* restriction definitions where order is important */
+    protected final List<String> restrictions = new ArrayList<>(5);
+    protected final Set<String> intendedValues = new HashSet<>(5);
+    protected final Set<String> restrictedValues = new HashSet<>(5);
+    protected final Set<String> ferries = new HashSet<>(5);
+    protected final Set<String> oneways = new HashSet<>(5);
+    // http://wiki.openstreetmap.org/wiki/Mapfeatures#Barrier
+    protected final Set<String> absoluteBarriers = new HashSet<>(5);
+    protected final Set<String> potentialBarriers = new HashSet<>(5);
+    protected final int speedBits;
+    protected final double speedFactor;
+    protected double speedDefault;
+    private final int maxTurnCosts;
+    private long encoderBit;
+    protected BooleanEncodedValue accessEnc;
+    protected BooleanEncodedValue roundaboutEnc;
+    protected DecimalEncodedValue speedEncoder;
     protected PMap properties;
-
     // This value determines the maximal possible speed of any road regardless the maxspeed value
     // lower values allow more compact representation of the routing graph
     protected int maxPossibleSpeed;
-
-    private EncodedValue turnCostEncoder;
+    /* Edge Flag Encoder fields */
+    private long nodeBitMask;
+    private long relBitMask;
+    private EncodedValueOld turnCostEncoder;
     private long turnRestrictionBit;
-    private final int maxTurnCosts;
-
-    /* processing properties (to be initialized lazy when needed) */
-    protected EdgeExplorer edgeOutExplorer;
-    protected EdgeExplorer edgeInExplorer;
-
-    /* restriction definitions where order is important */
-    protected final List<String> restrictions = new ArrayList<String>(5);
-    protected final Set<String> intendedValues = new HashSet<String>(5);
-    protected final Set<String> restrictedValues = new HashSet<String>(5);
-    protected final Set<String> ferries = new HashSet<String>(5);
-    protected final Set<String> oneways = new HashSet<String>(5);
-    protected final Set<String> acceptedRailways = new HashSet<String>(5);
-    // http://wiki.openstreetmap.org/wiki/Mapfeatures#Barrier
-    protected final Set<String> absoluteBarriers = new HashSet<String>(5);
-    protected final Set<String> potentialBarriers = new HashSet<String>(5);
     private boolean blockByDefault = true;
     private boolean blockFords = true;
-    protected final int speedBits;
-    protected final double speedFactor;
     private boolean registered;
+    protected EncodedValueLookup encodedValueLookup;
 
-    public AbstractFlagEncoder( PMap properties )
-    {
+    // Speeds from CarFlagEncoder
+    protected static final double UNKNOWN_DURATION_FERRY_SPEED = 5;
+    protected static final double SHORT_TRIP_FERRY_SPEED = 20;
+    protected static final double LONG_TRIP_FERRY_SPEED = 30;
+
+    private ConditionalTagInspector conditionalTagInspector;
+
+    public AbstractFlagEncoder(PMap properties) {
         throw new RuntimeException("This method must be overridden in derived classes");
     }
 
-    public AbstractFlagEncoder( String propertiesStr )
-    {
+    public AbstractFlagEncoder(String propertiesStr) {
         this(new PMap(propertiesStr));
     }
 
     /**
-     * @param speedBits specify the number of bits used for speed
-     * @param speedFactor specify the factor to multiple the stored value (can be used to increase
-     * or decrease accuracy of speed value)
+     * @param speedBits    specify the number of bits used for speed
+     * @param speedFactor  specify the factor to multiple the stored value (can be used to increase
+     *                     or decrease accuracy of speed value)
      * @param maxTurnCosts specify the maximum value used for turn costs, if this value is reached a
-     * turn is forbidden and results in costs of positive infinity.
+     *                     turn is forbidden and results in costs of positive infinity.
      */
-    protected AbstractFlagEncoder( int speedBits, double speedFactor, int maxTurnCosts )
-    {
+    protected AbstractFlagEncoder(int speedBits, double speedFactor, int maxTurnCosts) {
         this.maxTurnCosts = maxTurnCosts <= 0 ? 0 : maxTurnCosts;
         this.speedBits = speedBits;
         this.speedFactor = speedFactor;
@@ -112,257 +110,164 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
 
         ferries.add("shuttle_train");
         ferries.add("ferry");
-
-        acceptedRailways.add("tram");
-        acceptedRailways.add("abandoned");
-        acceptedRailways.add("abandoned_tram");        
-        acceptedRailways.add("disused");
-
-        // http://wiki.openstreetmap.org/wiki/Demolished_Railway
-        acceptedRailways.add("dismantled");
-        acceptedRailways.add("razed");
-        acceptedRailways.add("historic");
-        acceptedRailways.add("obliterated");
     }
 
-    public void setRegistered( boolean registered )
-    {
-        this.registered = registered;
+    // should be called as last method in constructor, move out of the flag encoder somehow
+    protected void init() {
+        // we should move 'OSM to object' logic into the DataReader like OSMReader, but this is a major task as we need to convert OSM format into kind of a standard/generic format
+        conditionalTagInspector = new ConditionalOSMTagInspector(DateRangeParser.createCalendar(), restrictions, restrictedValues, intendedValues);
     }
 
     @Override
-    public boolean isRegistered()
-    {
+    public boolean isRegistered() {
         return registered;
+    }
+
+    public void setRegistered(boolean registered) {
+        this.registered = registered;
     }
 
     /**
      * Should potential barriers block when no access limits are given?
      */
-    public void setBlockByDefault( boolean blockByDefault )
-    {
+    public void setBlockByDefault(boolean blockByDefault) {
         this.blockByDefault = blockByDefault;
     }
 
-    public void setBlockFords( boolean blockFords )
-    {
+    public boolean isBlockFords() {
+        return blockFords;
+    }
+
+    public void setBlockFords(boolean blockFords) {
         this.blockFords = blockFords;
     }
 
-    public boolean isBlockFords()
-    {
-        return blockFords;
+    public ConditionalTagInspector getConditionalTagInspector() {
+        return conditionalTagInspector;
+    }
+
+    protected void setConditionalTagInspector(ConditionalTagInspector conditionalTagInspector) {
+        this.conditionalTagInspector = conditionalTagInspector;
     }
 
     /**
      * Defines the bits for the node flags, which are currently used for barriers only.
      * <p>
+     *
      * @return incremented shift value pointing behind the last used bit
      */
-    public int defineNodeBits( int index, int shift )
-    {
+    public int defineNodeBits(int index, int shift) {
         return shift;
     }
 
     /**
      * Defines bits used for edge flags used for access, speed etc.
-     * <p>
-     * @param shift bit offset for the first bit used by this encoder
+     *
      * @return incremented shift value pointing behind the last used bit
      */
-    public int defineWayBits( int index, int shift )
-    {
-        if (isRegistered())
-            throw new IllegalStateException("You must not register a FlagEncoder (" + toString() + ") twice!");
-
-        setRegistered(true);
-        
+    public void createEncodedValues(List<EncodedValue> registerNewEncodedValue, String prefix, int index) {
         // define the first 2 speedBits in flags for routing
-        forwardBit = 1L << shift;
-        backwardBit = 2L << shift;
-        directionBitMask = 3L << shift;
-        shift += 2;
-        roundaboutBit = 1L << shift;
-        shift++;
-
-        // define internal flags for parsing
-        index *= 2;
-        acceptBit = 1L << index;
-        ferryBit = 2L << index;
-
-        return shift;
+        registerNewEncodedValue.add(accessEnc = new SimpleBooleanEncodedValue(prefix + "access", true));
+        roundaboutEnc = getBooleanEncodedValue(EncodingManager.ROUNDABOUT);
+        encoderBit = 1L << index;
     }
 
     /**
      * Defines the bits which are used for relation flags.
-     * <p>
+     *
      * @return incremented shift value pointing behind the last used bit
      */
-    public int defineRelationBits( int index, int shift )
-    {
+    public int defineRelationBits(int index, int shift) {
         return shift;
     }
 
     /**
      * Analyze the properties of a relation and create the routing flags for the second read step.
      * In the pre-parsing step this method will be called to determine the useful relation tags.
-     * <p>
      */
-    public abstract long handleRelationTags( OSMRelation relation, long oldRelationFlags );
+    public abstract long handleRelationTags(long oldRelation, ReaderRelation relation);
 
     /**
      * Decide whether a way is routable for a given mode of travel. This skips some ways before
      * handleWayTags is called.
-     * <p>
+     *
      * @return the encoded value to indicate if this encoder allows travel or not.
      */
-    public abstract long acceptWay( OSMWay way );
+    public abstract EncodingManager.Access getAccess(ReaderWay way);
 
     /**
-     * Analyze properties of a way and create the routing flags. This method is called in the second
+     * Analyze properties of a way and create the edge flags. This method is called in the second
      * parsing step.
      */
-    public abstract long handleWayTags( OSMWay way, long allowed, long relationFlags );
+    public abstract IntsRef handleWayTags(IntsRef edgeFlags, ReaderWay way, EncodingManager.Access access, long relationFlags);
 
     /**
      * Parse tags on nodes. Node tags can add to speed (like traffic_signals) where the value is
-     * strict negative or blocks access (like a barrier), then the value is strict positive.This
+     * strict negative or blocks access (like a barrier), then the value is strictly positive. This
      * method is called in the second parsing step.
+     *
+     * @return encoded values or 0 if not blocking or no value stored
      */
-    public long handleNodeTags( OSMNode node )
-    {
+    public long handleNodeTags(ReaderNode node) {
         // absolute barriers always block
         if (node.hasTag("barrier", absoluteBarriers))
-            return directionBitMask;
+            return encoderBit;
 
         // movable barriers block if they are not marked as passable
-        if (node.hasTag("barrier", potentialBarriers))
-        {
+        if (node.hasTag("barrier", potentialBarriers)) {
             boolean locked = false;
             if (node.hasTag("locked", "yes"))
                 locked = true;
 
-            for (String res : restrictions)
-            {
+            for (String res : restrictions) {
                 if (!locked && node.hasTag(res, intendedValues))
                     return 0;
 
                 if (node.hasTag(res, restrictedValues))
-                    return directionBitMask;
+                    return encoderBit;
             }
 
             if (blockByDefault)
-                return directionBitMask;
+                return encoderBit;
         }
 
         // In case explicit flag ford=no, don't block
         if (blockFords
                 && (node.hasTag("highway", "ford") || node.hasTag("ford"))
                 && !node.hasTag(restrictions, intendedValues)
-                && !node.hasTag("ford", "no"))
-        {
-            return directionBitMask;
-
+                && !node.hasTag("ford", "no")) {
+            return encoderBit;
         }
 
         return 0;
     }
 
     @Override
-    public InstructionAnnotation getAnnotation( long flags, Translation tr )
-    {
+    public InstructionAnnotation getAnnotation(IntsRef edgeFlags, Translation tr) {
         return InstructionAnnotation.EMPTY;
-    }
-
-    /**
-     * Swapping directions means swapping bits which are dependent on the direction of an edge like
-     * the access bits. But also direction dependent speed values should be swapped too. Keep in
-     * mind that this method is performance critical!
-     */
-    public long reverseFlags( long flags )
-    {
-        long dir = flags & directionBitMask;
-        if (dir == directionBitMask || dir == 0)
-            return flags;
-
-        return flags ^ directionBitMask;
     }
 
     /**
      * Sets default flags with specified access.
      */
-    public long flagsDefault( boolean forward, boolean backward )
-    {
-        long flags = speedEncoder.setDefaultValue(0);
-        return setAccess(flags, forward, backward);
+    protected void flagsDefault(IntsRef edgeFlags, boolean forward, boolean backward) {
+        if (forward)
+            speedEncoder.setDecimal(false, edgeFlags, speedDefault);
+        if (backward)
+            speedEncoder.setDecimal(true, edgeFlags, speedDefault);
+        accessEnc.setBool(false, edgeFlags, forward);
+        accessEnc.setBool(true, edgeFlags, backward);
     }
 
     @Override
-    public long setAccess( long flags, boolean forward, boolean backward )
-    {
-        return setBool(setBool(flags, K_BACKWARD, backward), K_FORWARD, forward);
-    }
-
-    @Override
-    public long setSpeed( long flags, double speed )
-    {
-        if (speed < 0 || Double.isNaN(speed))
-            throw new IllegalArgumentException("Speed cannot be negative or NaN: " + speed
-                    + ", flags:" + BitUtil.LITTLE.toBitString(flags));
-
-        if (speed < speedEncoder.factor / 2)
-            return setLowSpeed(flags, speed, false);
-
-        if (speed > getMaxSpeed())
-            speed = getMaxSpeed();
-
-        return speedEncoder.setDoubleValue(flags, speed);
-    }
-
-    protected long setLowSpeed( long flags, double speed, boolean reverse )
-    {
-        return setAccess(speedEncoder.setDoubleValue(flags, 0), false, false);
-    }
-
-    @Override
-    public double getSpeed( long flags )
-    {
-        double speedVal = speedEncoder.getDoubleValue(flags);
-        if (speedVal < 0)
-            throw new IllegalStateException("Speed was negative!? " + speedVal);
-
-        return speedVal;
-    }
-
-    @Override
-    public long setReverseSpeed( long flags, double speed )
-    {
-        return setSpeed(flags, speed);
-    }
-
-    @Override
-    public double getReverseSpeed( long flags )
-    {
-        return getSpeed(flags);
-    }
-
-    @Override
-    public long setProperties( double speed, boolean forward, boolean backward )
-    {
-        return setAccess(setSpeed(0, speed), forward, backward);
-    }
-
-    @Override
-    public double getMaxSpeed()
-    {
-        return speedEncoder.getMaxValue();
+    public double getMaxSpeed() {
+        return maxPossibleSpeed;
     }
 
     /**
      * @return -1 if no maxspeed found
      */
-    protected double getMaxSpeed( OSMWay way )
-    {
+    protected double getMaxSpeed(ReaderWay way) {
         double maxSpeed = parseSpeed(way.getTag("maxspeed"));
         double fwdSpeed = parseSpeed(way.getTag("maxspeed:forward"));
         if (fwdSpeed >= 0 && (maxSpeed < 0 || fwdSpeed < maxSpeed))
@@ -376,35 +281,28 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
     }
 
     @Override
-    public int hashCode()
-    {
+    public int hashCode() {
         int hash = 7;
-        hash = 61 * hash + (int) this.directionBitMask;
+        hash = 61 * hash + this.accessEnc.hashCode();
         hash = 61 * hash + this.toString().hashCode();
         return hash;
     }
 
     @Override
-    public boolean equals( Object obj )
-    {
+    public boolean equals(Object obj) {
         if (obj == null)
             return false;
 
-        // only rely on the string
-        //        if (getClass() != obj.getClass())
-        //            return false;
-        final AbstractFlagEncoder other = (AbstractFlagEncoder) obj;
-        if (this.directionBitMask != other.directionBitMask)
+        if (getClass() != obj.getClass())
             return false;
-
-        return this.toString().equals(other.toString());
+        AbstractFlagEncoder afe = (AbstractFlagEncoder) obj;
+        return toString().equals(afe.toString()) && encoderBit == afe.encoderBit && accessEnc.equals(afe.accessEnc);
     }
 
     /**
      * @return the speed in km/h
      */
-    protected double parseSpeed( String str )
-    {
+    public static double parseSpeed(String str) {
         if (Helper.isEmpty(str))
             return -1;
 
@@ -421,201 +319,145 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
         if (str.equals("walk") || str.endsWith(":living_street"))
             return 6;
 
-        try
-        {
+        try {
             int val;
             // see https://en.wikipedia.org/wiki/Knot_%28unit%29#Definitions
             int mpInteger = str.indexOf("mp");
-            if (mpInteger > 0)
-            {
+            if (mpInteger > 0) {
                 str = str.substring(0, mpInteger).trim();
                 val = Integer.parseInt(str);
                 return val * DistanceCalcEarth.KM_MILE;
             }
 
             int knotInteger = str.indexOf("knots");
-            if (knotInteger > 0)
-            {
+            if (knotInteger > 0) {
                 str = str.substring(0, knotInteger).trim();
                 val = Integer.parseInt(str);
                 return val * 1.852;
             }
 
             int kmInteger = str.indexOf("km");
-            if (kmInteger > 0)
-            {
+            if (kmInteger > 0) {
                 str = str.substring(0, kmInteger).trim();
-            } else
-            {
+            } else {
                 kmInteger = str.indexOf("kph");
-                if (kmInteger > 0)
-                {
+                if (kmInteger > 0) {
                     str = str.substring(0, kmInteger).trim();
                 }
             }
 
             return Integer.parseInt(str);
-        } catch (Exception ex)
-        {
+        } catch (Exception ex) {
             return -1;
         }
-    }
-
-    /**
-     * This method parses a string ala "00:00" (hours and minutes) or "0:00:00" (days, hours and
-     * minutes).
-     * <p>
-     * @return duration value in minutes
-     */
-    protected static int parseDuration( String str )
-    {
-        if (str == null)
-            return 0;
-
-        try
-        {
-            // for now ignore this special duration notation
-            // because P1M != PT1M but there are wrong edits in OSM! e.g. http://www.openstreetmap.org/way/24791405
-            // http://wiki.openstreetmap.org/wiki/Key:duration
-            if (str.startsWith("P"))
-                return 0;
-
-            int index = str.indexOf(":");
-            if (index > 0)
-            {
-                String hourStr = str.substring(0, index);
-                String minStr = str.substring(index + 1);
-                index = minStr.indexOf(":");
-                int minutes = 0;
-                if (index > 0)
-                {
-                    // string contains hours too
-                    String dayStr = hourStr;
-                    hourStr = minStr.substring(0, index);
-                    minStr = minStr.substring(index + 1);
-                    minutes = Integer.parseInt(dayStr) * 60 * 24;
-                }
-
-                minutes += Integer.parseInt(hourStr) * 60;
-                minutes += Integer.parseInt(minStr);
-                return minutes;
-            } else
-            {
-                return Integer.parseInt(str);
-            }
-        } catch (Exception ex)
-        {
-            logger.warn("Cannot parse " + str + " using 0 minutes");
-        }
-        return 0;
     }
 
     /**
      * Second parsing step. Invoked after splitting the edges. Currently used to offer a hook to
      * calculate precise speed values based on elevation data stored in the specified edge.
      */
-    public void applyWayTags( OSMWay way, EdgeIteratorState edge )
-    {
+    public void applyWayTags(ReaderWay way, EdgeIteratorState edge) {
     }
 
     /**
      * Special handling for ferry ways.
      */
-    protected long handleFerryTags( OSMWay way, double unknownSpeed, double shortTripsSpeed, double longTripsSpeed )
-    {
-        // to hours
-        double durationInHours = parseDuration(way.getTag("duration")) / 60d;
+    protected double getFerrySpeed(ReaderWay way) {
+        long duration = 0;
+
+        try {
+            // During the reader process we have converted the duration value into a artificial tag called "duration:seconds".
+            duration = Long.parseLong(way.getTag("duration:seconds"));
+        } catch (Exception ex) {
+        }
+        // seconds to hours
+        double durationInHours = duration / 60d / 60d;
+        // Check if our graphhopper specific artificially created estimated_distance way tag is present
+        Number estimatedLength = way.getTag("estimated_distance", null);
         if (durationInHours > 0)
-            try
-            {
-                Number estimatedLength = way.getTag("estimated_distance", null);
-                if (estimatedLength != null)
-                {
-                    // to km
-                    double val = estimatedLength.doubleValue() / 1000;
+            try {
+                if (estimatedLength != null) {
+                    double estimatedLengthInKm = estimatedLength.doubleValue() / 1000;
                     // If duration AND distance is available we can calculate the speed more precisely
                     // and set both speed to the same value. Factor 1.4 slower because of waiting time!
-                    shortTripsSpeed = Math.round(val / durationInHours / 1.4);
-                    if (shortTripsSpeed > getMaxSpeed())
-                        shortTripsSpeed = getMaxSpeed();
-                    longTripsSpeed = shortTripsSpeed;
+                    double calculatedTripSpeed = estimatedLengthInKm / durationInHours / 1.4;
+                    // Plausibility check especially for the case of wrongly used PxM format with the intention to
+                    // specify the duration in minutes, but actually using months
+                    if (calculatedTripSpeed > 0.01d) {
+                        if (calculatedTripSpeed > getMaxSpeed()) {
+                            return getMaxSpeed();
+                        }
+                        // If the speed is lower than the speed we can store, we have to set it to the minSpeed, but > 0
+                        if (Math.round(calculatedTripSpeed) < speedFactor / 2) {
+                            return speedFactor / 2;
+                        }
+
+                        return Math.round(calculatedTripSpeed);
+                    } else {
+                        long lastId = way.getNodes().isEmpty() ? -1 : way.getNodes().get(way.getNodes().size() - 1);
+                        long firstId = way.getNodes().isEmpty() ? -1 : way.getNodes().get(0);
+                        if (firstId != lastId)
+                            logger.warn("Unrealistic long duration ignored in way with way ID=" + way.getId() + " : Duration tag value="
+                                    + way.getTag("duration") + " (=" + Math.round(duration / 60d) + " minutes)");
+                        durationInHours = 0;
+                    }
                 }
-            } catch (Exception ex)
-            {
+            } catch (Exception ex) {
             }
 
-        if (durationInHours == 0)
-        {
+        if (durationInHours == 0) {
+            if (estimatedLength != null && estimatedLength.doubleValue() <= 300)
+                return speedFactor / 2;
             // unknown speed -> put penalty on ferry transport
-            return setSpeed(0, unknownSpeed);
-        } else if (durationInHours > 1)
-        {
+            return UNKNOWN_DURATION_FERRY_SPEED;
+        } else if (durationInHours > 1) {
             // lengthy ferries should be faster than short trip ferry
-            return setSpeed(0, longTripsSpeed);
-        } else
-        {
-            return setSpeed(0, shortTripsSpeed);
+            return LONG_TRIP_FERRY_SPEED;
+        } else {
+            return SHORT_TRIP_FERRY_SPEED;
         }
     }
 
-    void setWayBitMask( int usedBits, int shift )
-    {
-        wayBitMask = (1L << usedBits) - 1;
-        wayBitMask <<= shift;
-    }
-
-    long getWayBitMask()
-    {
-        return wayBitMask;
-    }
-
-    void setRelBitMask( int usedBits, int shift )
-    {
+    void setRelBitMask(int usedBits, int shift) {
         relBitMask = (1L << usedBits) - 1;
         relBitMask <<= shift;
     }
 
-    long getRelBitMask()
-    {
+    long getRelBitMask() {
         return relBitMask;
     }
 
-    void setNodeBitMask( int usedBits, int shift )
-    {
+    void setNodeBitMask(int usedBits, int shift) {
         nodeBitMask = (1L << usedBits) - 1;
         nodeBitMask <<= shift;
     }
 
-    long getNodeBitMask()
-    {
+    long getNodeBitMask() {
         return nodeBitMask;
     }
 
     /**
      * Defines the bits reserved for storing turn restriction and turn cost
      * <p>
+     *
      * @param shift bit offset for the first bit used by this encoder
      * @return incremented shift value pointing behind the last used bit
      */
-    public int defineTurnBits( int index, int shift )
-    {
+    public int defineTurnBits(int index, int shift) {
         if (maxTurnCosts == 0)
             return shift;
 
-        // optimization for turn restrictions only
-        else if (maxTurnCosts == 1)
-        {
+            // optimization for turn restrictions only
+        else if (maxTurnCosts == 1) {
             turnRestrictionBit = 1L << shift;
             return shift + 1;
         }
 
         int turnBits = Helper.countBitValue(maxTurnCosts);
-        turnCostEncoder = new EncodedValue("TurnCost", shift, turnBits, 1, 0, maxTurnCosts)
-        {
+        turnCostEncoder = new EncodedValueOld("TurnCost", shift, turnBits, 1, 0, maxTurnCosts) {
             // override to avoid expensive Math.round
             @Override
-            public final long getValue( long flags )
-            {
+            public final long getValue(long flags) {
                 // find value
                 flags &= mask;
                 flags >>>= shift;
@@ -626,8 +468,7 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
     }
 
     @Override
-    public boolean isTurnRestricted( long flags )
-    {
+    public boolean isTurnRestricted(long flags) {
         if (maxTurnCosts == 0)
             return false;
 
@@ -638,8 +479,7 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
     }
 
     @Override
-    public double getTurnCost( long flags )
-    {
+    public double getTurnCost(long flags) {
         if (maxTurnCosts == 0)
             return 0;
 
@@ -654,28 +494,22 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
     }
 
     @Override
-    public long getTurnFlags( boolean restricted, double costs )
-    {
+    public long getTurnFlags(boolean restricted, double costs) {
         if (maxTurnCosts == 0)
             return 0;
 
-        else if (maxTurnCosts == 1)
-        {
+        else if (maxTurnCosts == 1) {
             if (costs != 0)
                 throw new IllegalArgumentException("Only restrictions are supported");
 
             return restricted ? turnRestrictionBit : 0;
         }
 
-        if (restricted)
-        {
+        if (restricted) {
             if (costs != 0 || Double.isInfinite(costs))
                 throw new IllegalArgumentException("Restricted turn can only have infinite costs (or use 0)");
-        } else
-        {
-            if (costs >= maxTurnCosts)
-                throw new IllegalArgumentException("Cost is too high. Or specifiy restricted == true");
-        }
+        } else if (costs >= maxTurnCosts)
+            throw new IllegalArgumentException("Cost is too high. Or specify restricted == true");
 
         if (costs < 0)
             throw new IllegalArgumentException("Turn costs cannot be negative");
@@ -685,156 +519,110 @@ public abstract class AbstractFlagEncoder implements FlagEncoder, TurnCostEncode
         return turnCostEncoder.setValue(0L, (int) costs);
     }
 
-    protected boolean isFerry( long internalFlags )
-    {
-        return (internalFlags & ferryBit) != 0;
+    public final DecimalEncodedValue getAverageSpeedEnc() {
+        if (speedEncoder == null)
+            throw new NullPointerException("FlagEncoder " + toString() + " not yet initialized");
+        return speedEncoder;
     }
 
-    protected boolean isAccept( long internalFlags )
-    {
-        return (internalFlags & acceptBit) != 0;
-    }
-
-    @Override
-    public boolean isBackward( long flags )
-    {
-        return (flags & backwardBit) != 0;
-    }
-
-    @Override
-    public boolean isForward( long flags )
-    {
-        return (flags & forwardBit) != 0;
-    }
-
-    @Override
-    public long setBool( long flags, int key, boolean value )
-    {
-        switch (key)
-        {
-            case K_FORWARD:
-                return value ? flags | forwardBit : flags & ~forwardBit;
-            case K_BACKWARD:
-                return value ? flags | backwardBit : flags & ~backwardBit;
-            case K_ROUNDABOUT:
-                return value ? flags | roundaboutBit : flags & ~roundaboutBit;
-            default:
-                throw new IllegalArgumentException("Unknown key " + key + " for boolean value");
-        }
-    }
-
-    @Override
-    public boolean isBool( long flags, int key )
-    {
-        switch (key)
-        {
-            case K_FORWARD:
-                return isForward(flags);
-            case K_BACKWARD:
-                return isBackward(flags);
-            case K_ROUNDABOUT:
-                return (flags & roundaboutBit) != 0;
-            default:
-                throw new IllegalArgumentException("Unknown key " + key + " for boolean value");
-        }
-    }
-
-    @Override
-    public long setLong( long flags, int key, long value )
-    {
-        throw new UnsupportedOperationException("Unknown key " + key + " for long value.");
-    }
-
-    @Override
-    public long getLong( long flags, int key )
-    {
-        throw new UnsupportedOperationException("Unknown key " + key + " for long value.");
-    }
-
-    @Override
-    public long setDouble( long flags, int key, double value )
-    {
-        throw new UnsupportedOperationException("Unknown key " + key + " for double value.");
-    }
-
-    @Override
-    public double getDouble( long flags, int key )
-    {
-        throw new UnsupportedOperationException("Unknown key " + key + " for double value.");
-    }
-
-    @Deprecated
-    protected static double parseDouble( String str, String key, double defaultD )
-    {
-        String val = getStr(str, key);
-        if (val.isEmpty())
-            return defaultD;
-        return Double.parseDouble(val);
-    }
-
-    @Deprecated
-    protected static long parseLong( String str, String key, long defaultL )
-    {
-        String val = getStr(str, key);
-        if (val.isEmpty())
-            return defaultL;
-        return Long.parseLong(val);
-    }
-
-    @Deprecated
-    protected static boolean parseBoolean( String str, String key, boolean defaultB )
-    {
-        String val = getStr(str, key);
-        if (val.isEmpty())
-            return defaultB;
-        return Boolean.parseBoolean(val);
-    }
-
-    @Deprecated
-    protected static String getStr( String str, String key )
-    {
-        key = key.toLowerCase();
-        for (String s : str.split("\\|"))
-        {
-            s = s.trim().toLowerCase();
-            int index = s.indexOf("=");
-            if (index < 0)
-                continue;
-
-            String field = s.substring(0, index);
-            String valueStr = s.substring(index + 1);
-            if (key.equals(field))
-                return valueStr;
-        }
-        return "";
+    public final BooleanEncodedValue getAccessEnc() {
+        if (accessEnc == null)
+            throw new NullPointerException("FlagEncoder " + toString() + " not yet initialized");
+        return accessEnc;
     }
 
     /**
-     * @param force should be false if speed should be changed only if it is bigger than maxspeed.
+     * Most use cases do not require this method. Will still keep it accessible so that one can disable it
+     * until the averageSpeedEncodedValue is moved out of the FlagEncoder.
+     *
+     * @Deprecated
      */
-    protected double applyMaxSpeed( OSMWay way, double speed, boolean force )
-    {
+    protected void setSpeed(boolean reverse, IntsRef edgeFlags, double speed) {
+        if (speed < 0 || Double.isNaN(speed))
+            throw new IllegalArgumentException("Speed cannot be negative or NaN: " + speed + ", flags:" + BitUtil.LITTLE.toBitString(edgeFlags));
+
+        if (speed < speedFactor / 2) {
+            speedEncoder.setDecimal(reverse, edgeFlags, 0);
+            accessEnc.setBool(reverse, edgeFlags, false);
+            return;
+        }
+
+        if (speed > getMaxSpeed())
+            speed = getMaxSpeed();
+
+        speedEncoder.setDecimal(reverse, edgeFlags, speed);
+    }
+
+    double getSpeed(IntsRef edgeFlags) {
+        return getSpeed(false, edgeFlags);
+    }
+
+    double getSpeed(boolean reverse, IntsRef edgeFlags) {
+        double speedVal = speedEncoder.getDecimal(reverse, edgeFlags);
+        if (speedVal < 0)
+            throw new IllegalStateException("Speed was negative!? " + speedVal);
+
+        return speedVal;
+    }
+
+    /**
+     * @param way   needed to retrieve tags
+     * @param speed speed guessed e.g. from the road type or other tags
+     * @return The assumed speed.
+     */
+    protected double applyMaxSpeed(ReaderWay way, double speed) {
         double maxSpeed = getMaxSpeed(way);
-        // apply only if smaller maxSpeed
-        if (maxSpeed >= 0)
-        {
-            if (force || maxSpeed < speed)
-                return maxSpeed * 0.9;
+        // We obey speed limits
+        if (maxSpeed >= 0) {
+            // We assume that the average speed is 90% of the allowed maximum
+            return maxSpeed * 0.9;
         }
         return speed;
     }
 
-    protected String getPropertiesString()
-    {
-        return "speedFactor=" + speedFactor + "|speedBits=" + speedBits + "|turnCosts=" + (maxTurnCosts > 0);
+    protected String getPropertiesString() {
+        return "speed_factor=" + speedFactor + "|speed_bits=" + speedBits + "|turn_costs=" + (maxTurnCosts > 0);
     }
 
     @Override
-    public boolean supports( Class<?> feature )
-    {
+    public <T extends EncodedValue> T getEncodedValue(String key, Class<T> encodedValueType) {
+        return encodedValueLookup.getEncodedValue(key, encodedValueType);
+    }
+
+    @Override
+    public BooleanEncodedValue getBooleanEncodedValue(String key) {
+        return encodedValueLookup.getBooleanEncodedValue(key);
+    }
+
+    @Override
+    public IntEncodedValue getIntEncodedValue(String key) {
+        return encodedValueLookup.getIntEncodedValue(key);
+    }
+
+    @Override
+    public DecimalEncodedValue getDecimalEncodedValue(String key) {
+        return encodedValueLookup.getDecimalEncodedValue(key);
+    }
+
+    @Override
+    public <T extends Enum> EnumEncodedValue getEnumEncodedValue(String key, Class<T> enumType) {
+        return encodedValueLookup.getEnumEncodedValue(key, enumType);
+    }
+
+    public void setEncodedValueLookup(EncodedValueLookup encodedValueLookup) {
+        this.encodedValueLookup = encodedValueLookup;
+    }
+
+    @Override
+    public boolean supports(Class<?> feature) {
         if (TurnWeighting.class.isAssignableFrom(feature))
             return maxTurnCosts > 0;
 
         return false;
+    }
+
+    @Override
+    public boolean hasEncoder(String key) {
+        return encodedValueLookup.hasEncoder(key);
     }
 }

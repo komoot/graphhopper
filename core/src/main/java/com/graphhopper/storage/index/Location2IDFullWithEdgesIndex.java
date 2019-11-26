@@ -1,14 +1,14 @@
 /*
- *  Licensed to GraphHopper and Peter Karich under one or more contributor
- *  license agreements. See the NOTICE file distributed with this work for 
+ *  Licensed to GraphHopper GmbH under one or more contributor
+ *  license agreements. See the NOTICE file distributed with this work for
  *  additional information regarding copyright ownership.
- * 
- *  GraphHopper licenses this file to you under the Apache License, 
- *  Version 2.0 (the "License"); you may not use this file except in 
+ *
+ *  GraphHopper GmbH licenses this file to you under the Apache License,
+ *  Version 2.0 (the "License"); you may not use this file except in
  *  compliance with the License. You may obtain a copy of the License at
- * 
+ *
  *       http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  *  Unless required by applicable law or agreed to in writing, software
  *  distributed under the License is distributed on an "AS IS" BASIS,
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,88 +21,67 @@ import com.graphhopper.routing.util.AllEdgesIterator;
 import com.graphhopper.routing.util.EdgeFilter;
 import com.graphhopper.storage.Graph;
 import com.graphhopper.storage.NodeAccess;
-import com.graphhopper.util.DistancePlaneProjection;
 import com.graphhopper.util.DistanceCalc;
-import com.graphhopper.util.DistanceCalcEarth;
 import com.graphhopper.util.Helper;
 
 /**
  * Same as full index but calculates distance to all edges too
  * <p>
+ *
  * @author Peter Karich
  */
-public class Location2IDFullWithEdgesIndex implements LocationIndex
-{
-    private DistanceCalc calc = Helper.DIST_EARTH;
+public class Location2IDFullWithEdgesIndex implements LocationIndex {
     private final Graph graph;
     private final NodeAccess nodeAccess;
+    private DistanceCalc calc = Helper.DIST_EARTH;
     private boolean closed = false;
 
-    public Location2IDFullWithEdgesIndex( Graph g )
-    {
+    public Location2IDFullWithEdgesIndex(Graph g) {
         this.graph = g;
         this.nodeAccess = g.getNodeAccess();
     }
 
     @Override
-    public boolean loadExisting()
-    {
+    public boolean loadExisting() {
         return true;
     }
 
     @Override
-    public LocationIndex setResolution( int resolution )
-    {
+    public LocationIndex setResolution(int resolution) {
         return this;
     }
 
     @Override
-    public LocationIndex setApproximation( boolean approxDist )
-    {
-        if (approxDist)
-        {
+    public LocationIndex setApproximation(boolean approxDist) {
+        if (approxDist) {
             calc = Helper.DIST_PLANE;
-        } else
-        {
+        } else {
             calc = Helper.DIST_EARTH;
         }
         return this;
     }
 
     @Override
-    public LocationIndex prepareIndex()
-    {
+    public LocationIndex prepareIndex() {
         return this;
     }
 
     @Override
-    public int findID( double lat, double lon )
-    {
-        return findClosest(lat, lon, EdgeFilter.ALL_EDGES).getClosestNode();
-    }
-
-    @Override
-    public QueryResult findClosest( double queryLat, double queryLon, EdgeFilter filter )
-    {
+    public QueryResult findClosest(double queryLat, double queryLon, EdgeFilter filter) {
         if (isClosed())
             throw new IllegalStateException("You need to create a new LocationIndex instance as it is already closed");
 
         QueryResult res = new QueryResult(queryLat, queryLon);
         double foundDist = Double.MAX_VALUE;
         AllEdgesIterator iter = graph.getAllEdges();
-        while (iter.next())
-        {
-            if (!filter.accept(iter))
-            {
+        while (iter.next()) {
+            if (!filter.accept(iter)) {
                 continue;
             }
-            for (int i = 0, node; i < 2; i++)
-            {
-                if (i == 0)
-                {
+            for (int i = 0, node; i < 2; i++) {
+                if (i == 0) {
                     node = iter.getBaseNode();
-                } else
-                {
+                } else {
                     node = iter.getAdjNode();
                 }
 
@@ -112,8 +91,7 @@ public class Location2IDFullWithEdgesIndex implements LocationIndex
                 if (fromDist < 0)
                     continue;
 
-                if (fromDist < foundDist)
-                {
+                if (fromDist < foundDist) {
                     res.setQueryDistance(fromDist);
                     res.setClosestEdge(iter.detach(false));
                     res.setClosestNode(node);
@@ -129,12 +107,10 @@ public class Location2IDFullWithEdgesIndex implements LocationIndex
                 double toLon = nodeAccess.getLongitude(toNode);
 
                 if (calc.validEdgeDistance(queryLat, queryLon,
-                        fromLat, fromLon, toLat, toLon))
-                {
+                        fromLat, fromLon, toLat, toLon)) {
                     double distEdge = calc.calcDenormalizedDist(calc.calcNormalizedEdgeDistance(queryLat, queryLon,
                             fromLat, fromLon, toLat, toLon));
-                    if (distEdge < foundDist)
-                    {
+                    if (distEdge < foundDist) {
                         res.setQueryDistance(distEdge);
                         res.setClosestNode(node);
                         res.setClosestEdge(iter);
@@ -150,36 +126,30 @@ public class Location2IDFullWithEdgesIndex implements LocationIndex
     }
 
     @Override
-    public LocationIndex create( long size )
-    {
+    public LocationIndex create(long size) {
         return this;
     }
 
     @Override
-    public void flush()
-    {
+    public void flush() {
     }
 
     @Override
-    public void close()
-    {
+    public void close() {
         closed = true;
     }
 
     @Override
-    public boolean isClosed()
-    {
+    public boolean isClosed() {
         return closed;
     }
 
     @Override
-    public long getCapacity()
-    {
+    public long getCapacity() {
         return 0;
     }
 
     @Override
-    public void setSegmentSize( int bytes )
-    {
+    public void setSegmentSize(int bytes) {
     }
 }

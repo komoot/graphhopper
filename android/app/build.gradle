@@ -1,25 +1,26 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 19
-    buildToolsVersion "21.1.2"
+    compileSdkVersion 28
+    buildToolsVersion "28.0.3"
 
     defaultConfig {
         applicationId "com.graphhopper.android"
         minSdkVersion 10
+        //noinspection ExpiredTargetSdkVersion
         targetSdkVersion 22
     }
 
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.txt'
+    /*buildTypes {
+        all {
+            minifyEnabled true
+            useProguard false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
-    }
+    }*/
 
     lintOptions {
         /* CGIARProvider refers to java.awt
-         * Helper7 refers to java.lang.management
          * HeightTile refers to javax.imageio and java.awt
          * OSMElement refers to javax.xml.stream
          */
@@ -35,17 +36,22 @@ configurations.all {
  **/
 
 dependencies {
-    compile(group: 'com.graphhopper', name: 'graphhopper', version: '0.6-SNAPSHOT') {
+    implementation(group: 'com.graphhopper', name: 'graphhopper-core', version: '0.12-SNAPSHOT') {
        exclude group: 'com.google.protobuf', module: 'protobuf-java'
        exclude group: 'org.openstreetmap.osmosis', module: 'osmosis-osm-binary'
        exclude group: 'org.apache.xmlgraphics', module: 'xmlgraphics-commons'
     }
 
-    compile group: 'org.mapsforge', name: 'mapsforge-core', version: '0.5.2'
-    compile group: 'org.mapsforge', name: 'mapsforge-map', version: '0.5.2'
-    compile group: 'org.mapsforge', name: 'mapsforge-map-android', version: '0.5.2'
-    compile group: 'org.mapsforge', name: 'mapsforge-map-reader', version: '0.5.2'
+    implementation 'org.mapsforge:vtm:0.10.0'
+    implementation 'org.mapsforge:vtm-android:0.10.0'
+    implementation 'org.mapsforge:vtm-android:0.10.0:natives-armeabi-v7a'
+    implementation 'org.mapsforge:vtm-android:0.10.0:natives-arm64-v8a'
+    implementation 'org.mapsforge:vtm-android:0.10.0:natives-x86'
+    implementation 'org.mapsforge:vtm-android:0.10.0:natives-x86_64'
+    implementation 'org.mapsforge:vtm-jts:0.10.0'
+    implementation 'org.mapsforge:vtm-themes:0.10.0'
+    implementation 'com.caverock:androidsvg:1.3'
 
-    compile group: 'org.slf4j', name: 'slf4j-android', version: '1.7.12'
-    compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.12'
+    implementation 'org.slf4j:slf4j-api:1.7.25'
+    implementation 'org.slf4j:slf4j-android:1.7.25'
 }

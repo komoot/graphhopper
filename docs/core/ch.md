@@ -8,4 +8,6 @@ which allows to store shortcuts too.
 
 A prepared graph can also be used for normal graph traversal IF you use chGraph.getBaseGraph().
 
-If CH is enabled multiple vehicles will work but only one works in speed-up mode and is faster, see issue #111.
+If CH is enabled multiple vehicles will work.
+
+Details about the edge-based version of CH, that also allows taking into account turn costs and restrictions can be found [here](./edge-based-ch.md).

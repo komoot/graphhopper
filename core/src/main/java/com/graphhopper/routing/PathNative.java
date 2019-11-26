@@ -1,14 +1,14 @@
 /*
- *  Licensed to GraphHopper and Peter Karich under one or more contributor
- *  license agreements. See the NOTICE file distributed with this work for 
+ *  Licensed to GraphHopper GmbH under one or more contributor
+ *  license agreements. See the NOTICE file distributed with this work for
  *  additional information regarding copyright ownership.
- * 
- *  GraphHopper licenses this file to you under the Apache License, 
- *  Version 2.0 (the "License"); you may not use this file except in 
+ *
+ *  GraphHopper GmbH licenses this file to you under the Apache License,
+ *  Version 2.0 (the "License"); you may not use this file except in
  *  compliance with the License. You may obtain a copy of the License at
- * 
+ *
  *       http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  *  Unless required by applicable law or agreed to in writing, software
  *  distributed under the License is distributed on an "AS IS" BASIS,
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,42 +18,38 @@
 package com.graphhopper.routing;
 
 import com.graphhopper.routing.util.FlagEncoder;
+import com.graphhopper.routing.weighting.Weighting;
 import com.graphhopper.storage.Graph;
 import com.graphhopper.util.EdgeIterator;
 
 /**
- * This class creates a Path from a DijkstraOneToMany node
- * <p>
+ * This class creates a Path from a DijkstraOneToMany algorithm
+ *
  * @author Peter Karich
  */
-public class PathNative extends Path
-{
+public class PathNative extends Path {
     private final int[] parentNodes;
     private final int[] parentEdges;
 
-    public PathNative( Graph g, FlagEncoder encoder, int[] parentNodes, int[] parentEdges )
-    {
-        super(g, encoder);
+    public PathNative(Graph g, Weighting weighting, int[] parentNodes, int[] parentEdges) {
+        super(g, weighting);
         this.parentNodes = parentNodes;
         this.parentEdges = parentEdges;
     }
 
-    /**
-     * Extracts path from two shortest-path-tree
-     */
     @Override
-    public Path extract()
-    {
+    public Path extract() {
         if (endNode < 0)
             return this;
 
-        while (true)
-        {
+        int prevEdge = EdgeIterator.NO_EDGE;
+        while (true) {
             int edgeId = parentEdges[endNode];
             if (!EdgeIterator.Edge.isValid(edgeId))
                 break;
 
-            processEdge(edgeId, endNode);
+            processEdge(edgeId, endNode, prevEdge);
+            prevEdge = edgeId;
             endNode = parentNodes[endNode];
         }
         reverseOrder();

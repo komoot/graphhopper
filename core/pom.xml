@@ -4,24 +4,28 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.graphhopper</groupId>
-    <artifactId>graphhopper</artifactId>
-    <name>GraphHopper</name>
-    <version>0.6-SNAPSHOT</version>
-    <packaging>jar</packaging> 
+    <artifactId>graphhopper-core</artifactId>
+    <name>GraphHopper Core</name>
+    <version>0.12.0-kmt-4</version>
+    <packaging>jar</packaging>
     <description>
-        GraphHopper is a fast and memory efficient Java road routing engine 
+        GraphHopper is a fast and memory efficient Java road routing engine
         working seamlessly with OpenStreetMap data.
     </description>
     <parent>
         <groupId>com.graphhopper</groupId>
-        <artifactId>graphhopper-parent</artifactId>    	
-        <version>0.6-SNAPSHOT</version>
+        <artifactId>graphhopper-parent</artifactId>
+        <version>0.12.0-kmt-4</version>
     </parent>
-        
-    <properties>  
-        <netbeans.hint.license>apache20</netbeans.hint.license>        
-        <maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ssZ</maven.build.timestamp.format>        
-        <builddate>${maven.build.timestamp}</builddate>        
+
+    <properties>
+        <netbeans.hint.license>apache20</netbeans.hint.license>
+        <!-- Make sure that we use the same format as for Helper.createFormatter.
+             We cannot force the UTC TimeZone so it will just throw away the local offset or is this
+             fixed due to https://issues.apache.org/jira/browse/MNG-5647 ?
+        -->
+        <maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ss'Z'</maven.build.timestamp.format>
+        <builddate>${maven.build.timestamp}</builddate>
     </properties>
     <licenses>
         <license>
@@ -30,29 +34,37 @@
             <distribution>repo</distribution>
             <comments>A business-friendly OSS license</comments>
         </license>
-    </licenses> 
+    </licenses>
     <dependencies>
-        
-        <!-- Trove is LGPL and slightly big (~3MB) -->
         <dependency>
-            <groupId>net.sf.trove4j</groupId>
-            <artifactId>trove4j</artifactId>
-            <version>3.0.3</version>
-        </dependency>        
+            <groupId>com.graphhopper</groupId>
+            <artifactId>graphhopper-api</artifactId>
+            <version>${project.parent.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.carrotsearch</groupId>
+            <artifactId>hppc</artifactId>
+            <version>0.8.1</version>
+        </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
             <version>${slf4j.version}</version>
         </dependency>
-        <!-- more recent and nicer but bigger
+
+        <!-- for using CGIAR: elevation data importing via tif files-->
         <dependency>
-            <groupId>ch.qos.logback</groupId>
-            <artifactId>logback-classic</artifactId>
-            <version>1.0.13</version>
-            <scope>test</scope>
+            <groupId>org.apache.xmlgraphics</groupId>
+            <artifactId>xmlgraphics-commons</artifactId>
+            <version>2.3</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>commons-logging</groupId>
+                    <artifactId>commons-logging</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
-        -->
-        
+
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-log4j12</artifactId>
@@ -65,53 +77,28 @@
             <version>${log4j.version}</version>
             <scope>test</scope>
         </dependency>
-        
-        <!-- for using CGIAR: elevation data importing via tif files-->
         <dependency>
-            <groupId>org.apache.xmlgraphics</groupId>
-            <artifactId>xmlgraphics-commons</artifactId>
-            <version>2.0.1</version>
-        </dependency>
-        
-        <dependency>
-            <groupId>com.google.protobuf</groupId>
-            <artifactId>protobuf-java</artifactId>
-            <version>2.6.1</version>
-        </dependency>        
-        <dependency>
-            <groupId>org.openstreetmap.osmosis</groupId>
-            <artifactId>osmosis-osm-binary</artifactId>
-            <version>0.44.1</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.json</groupId>
-            <artifactId>json</artifactId>
-            <!-- keep oldish version as we want to support 1.5 for a while -->
-            <version>20140107</version>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.12</version>
             <scope>test</scope>
         </dependency>
-        
+        <dependency>
+            <groupId>com.graphhopper</groupId>
+            <artifactId>graphhopper-web-api</artifactId>
+            <version>${project.parent.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
-        
+
     <build>
         <pluginManagement>
             <plugins>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-assembly-plugin</artifactId>
-                    <configuration>                     
-                        <!-- for usage on android -->
-                        <descriptors>
-                            <descriptor>src/main/assembly/android.xml</descriptor>
-                        </descriptors>
-                    </configuration>
-                </plugin>                
-                
-                <!-- create jar with test classes to be reused in other projects -->                
+                <!-- create jar with test classes to be reused in other projects like external or our reader-osm -->
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.1.0</version>
                     <executions>
                         <execution>
                             <goals>
@@ -120,10 +107,35 @@
                         </execution>
                     </executions>
                 </plugin>
-                
+
+                <plugin>
+                    <groupId>pl.project13.maven</groupId>
+                    <artifactId>git-commit-id-plugin</artifactId>
+                    <version>2.2.5</version>
+                </plugin>
             </plugins>
         </pluginManagement>
-        
+
+        <plugins>
+            <plugin>
+                <groupId>pl.project13.maven</groupId>
+                <artifactId>git-commit-id-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>revision</goal>
+                        </goals>
+                    </execution>
+                </executions>
+
+                <configuration>
+                    <dotGitDirectory>${parent.basedir}/.git</dotGitDirectory>
+                    <failOnNoGitDirectory>false</failOnNoGitDirectory>
+                    <failOnUnableToExtractRepoInfo>false</failOnUnableToExtractRepoInfo>
+                </configuration>
+            </plugin>
+        </plugins>
+
         <!-- make version available at runtime via version file -->
         <resources>
             <resource>
@@ -132,6 +144,7 @@
                 <includes>
                     <include>**/version</include>
                     <include>**/builddate</include>
+                    <include>**/gitinfo</include>
                 </includes>
             </resource>
             <resource>
@@ -140,6 +153,7 @@
                 <excludes>
                     <exclude>**/version</exclude>
                     <exclude>**/builddate</exclude>
+                    <exclude>**/gitinfo</exclude>
                 </excludes>
             </resource>
         </resources>
