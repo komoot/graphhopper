@@ -33,7 +33,10 @@ import java.util.List;
 /**
  * @author Peter Karich
  */
-class VirtualEdgeIterator implements EdgeIterator, CHEdgeIteratorState {
+//This is public because in calcWeight we need different calculation for virtualEdges
+//And if this isn't public we need to use edgeState.getClass().getSimpleName().equals("VirtualEdgeIterator")
+//Which takes 12% of importer time because of reflection
+public class VirtualEdgeIterator implements EdgeIterator, CHEdgeIteratorState {
     private final List<EdgeIteratorState> edges;
     private int current;
 
