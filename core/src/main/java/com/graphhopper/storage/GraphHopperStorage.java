@@ -39,7 +39,7 @@ import java.util.List;
  * @see GraphBuilder to create a (CH)Graph easier
  * @see #getGraph(java.lang.Class)
  */
-public final class GraphHopperStorage implements GraphStorage, Graph {
+public class GraphHopperStorage implements GraphStorage, Graph {
     private final Directory dir;
     private final EncodingManager encodingManager;
     private final StorableProperties properties;
